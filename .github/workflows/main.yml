@@ -1,0 +1,27 @@
+name: System_Health_Check
+on:
+  schedule:
+    - cron: '0 * * * *' # Every 60 mins
+  workflow_dispatch:      # Manual trigger button
+
+jobs:
+  run_farm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install Dependencies
+        run: |
+          pip install playwright playwright-stealth
+          playwright install chromium --with-deps
+      - name: Run Engine
+        env:
+          # Mapping Secrets to Environment Variables
+          PROXY_USER: ${{ secrets.PROXY_USER }}
+          PROXY_PASS: ${{ secrets.PROXY_PASS }}
+          ALBUM_LINKS: ${{ secrets.ALBUM_LINKS }}
+        run: python farm.py
