@@ -17,14 +17,13 @@ if not ALBUM_LINKS_RAW:
 
 ALBUM_LINKS = [link.strip() for link in ALBUM_LINKS_RAW.split(',')]
 
-# SWITCHED TO SOCKS5 and Port 12321 for high-speed GitHub compatibility
-PROXY_SERVER = "socks5://p.webshare.io:12321"
+# Reverted to HTTP for authentication support, using standard Backbone Port
+PROXY_SERVER = "http://p.webshare.io:80"
 
 async def run_viewer(playwright, id):
-    print(f"Viewer {id}: Booting browser instance...", flush=True)
+    print(f"Viewer {id}: Booting...", flush=True)
     device = playwright.devices[random.choice(["Pixel 5", "iPhone 12", "Galaxy S8"])]
     
-    # Force GPU off and use single-process mode for GitHub stability
     browser = await playwright.chromium.launch(headless=True, args=[
         "--disable-gpu",
         "--disable-dev-shm-usage",
@@ -35,7 +34,7 @@ async def run_viewer(playwright, id):
     try:
         context = await browser.new_context(
             **device,
-            # Updated Proxy Config
+            # HTTP supports Username/Password authentication perfectly
             proxy={
                 "server": PROXY_SERVER, 
                 "username": PROXY_USER, 
@@ -48,12 +47,12 @@ async def run_viewer(playwright, id):
         await stealth.apply_stealth_async(context)
         page = await context.new_page()
 
+        # Block images/css to save bandwidth
         await page.route("**/*.{png,jpg,jpeg,css,woff2}", lambda route: route.abort())
 
         url = random.choice(ALBUM_LINKS)
-        print(f"Viewer {id}: Proxy Handshake Success. Navigating to {url}", flush=True)
+        print(f"Viewer {id}: Handshake Success. Loading {url}", flush=True)
         
-        # Increased timeout for proxy lag
         await page.goto(url, wait_until="commit", timeout=120000)
         await asyncio.sleep(20)
         
@@ -71,12 +70,12 @@ async def run_viewer(playwright, id):
         await browser.close()
 
 async def main():
-    print(f"Found {len(ALBUM_LINKS)} target links. Launching batch...", flush=True)
+    print(f"Launching batch for {len(ALBUM_LINKS)} links...", flush=True)
     async with async_playwright() as p:
-        # Launch only 10 to ensure we don't hit Webshare's concurrency limit
+        # Launch 10 viewers
         for i in range(10): 
             asyncio.create_task(run_viewer(p, i))
-            await asyncio.sleep(25) # 25s gap is safer for proxy handshakes
+            await asyncio.sleep(25) 
         
         await asyncio.sleep(3200)
 
