@@ -1,76 +1,84 @@
 import asyncio
 import random
 import os
+import sys
 from playwright.async_api import async_playwright
 from playwright_stealth import Stealth
 
-# --- GITHUB SECRETS ---
+# HEARTBEAT: This tells you immediately if the script is alive
+print("--- SCRIPT INITIALIZED: LOADING SECRETS ---", flush=True)
+
 PROXY_USER = os.getenv('PROXY_USER')
 PROXY_PASS = os.getenv('PROXY_PASS')
 ALBUM_LINKS_RAW = os.getenv('ALBUM_LINKS')
 ALBUM_LINKS = ALBUM_LINKS_RAW.split(',') if ALBUM_LINKS_RAW else []
 
-# Port 8000 is generally more stable for Webshare backbone
+# Webshare Backbone Port
 PROXY_SERVER = "http://p.webshare.io:8000"
 
 async def run_viewer(playwright, id):
-    device_name = random.choice(["Pixel 5", "iPhone 12", "Galaxy S8"])
-    device = playwright.devices[device_name]
+    print(f"Viewer {id}: Booting...", flush=True)
+    device = playwright.devices[random.choice(["Pixel 5", "iPhone 12"])]
     
-    # Launch with slightly more robust args
+    # Launch with extreme hardware efficiency
     browser = await playwright.chromium.launch(headless=True, args=[
-        "--mute-audio",
-        "--disable-setuid-sandbox",
-        "--no-sandbox"
+        "--disable-gpu",
+        "--disable-dev-shm-usage",
+        "--no-sandbox",
+        "--mute-audio"
     ])
     
     try:
-        # Added ignore_https_errors to bypass proxy handshake stalls
         context = await browser.new_context(
             **device,
             proxy={"server": PROXY_SERVER, "username": PROXY_USER, "password": PROXY_PASS},
-            ignore_https_errors=True 
+            ignore_https_errors=True
         )
         
         stealth = Stealth()
         await stealth.apply_stealth_async(context)
         page = await context.new_page()
 
+        # Block everything except the music player script
         await page.route("**/*.{png,jpg,jpeg,css,woff2}", lambda route: route.abort())
 
         url = random.choice(ALBUM_LINKS)
-        print(f"Viewer {id}: Starting {device_name} session...")
+        print(f"Viewer {id}: Navigating to {url}", flush=True)
         
-        # Increased timeout to 90s for slow proxy connections
-        await page.goto(url, wait_until="commit", timeout=120000)
+        # 'commit' is the fastest wait state
+        await page.goto(url, wait_until="commit", timeout=90000)
         await asyncio.sleep(15)
         
-        # Tap Play
+        # Multi-platform Play Button Selector
         play_btn = page.locator('button[aria-label="Play"], .play-btn, .icon-play, [data-testid="play-button"]').first
-        await play_btn.wait_for(state="visible", timeout=30000)
-        await play_btn.tap()
+        await play_btn.click(timeout=30000)
         
-        print(f"Viewer {id}: SUCCESS. Playing track.")
-        await asyncio.sleep(2700) 
+        print(f"Viewer {id}: STREAM STARTED SUCCESSFULLY.", flush=True)
+        await asyncio.sleep(2600) 
         
     except Exception as e:
-        print(f"Viewer {id}: Connection Error - {e}")
+        print(f"Viewer {id}: Stopped due to -> {e}", flush=True)
     finally:
         await browser.close()
 
 async def main():
     if not ALBUM_LINKS or not PROXY_USER:
-        print("CRITICAL: Secrets missing!")
+        print("CRITICAL ERROR: ALBUM_LINKS or PROXY_USER is empty in GitHub Secrets!", flush=True)
         return
 
+    print(f"Starting Farm with {len(ALBUM_LINKS)} target links...", flush=True)
+
     async with async_playwright() as p:
-        # NEW: Sequential launch to avoid "Tunnel" crashes
-        for i in range(15):
+        # We launch them one by one with a delay to prevent GitHub CPU spikes
+        for i in range(12): # Reduced to 12 for better stability
             asyncio.create_task(run_viewer(p, i))
-            await asyncio.sleep(8) # Wait 8 seconds between each bot start
+            await asyncio.sleep(15) # Wait 15s between each bot
         
-        # Keep main loop alive for the duration of the cycle
-        await asyncio.sleep(3300)
+        # Total wait time to keep the Action alive
+        await asyncio.sleep(3000)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
