@@ -22,7 +22,7 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           # Replace 'USER/REPO' with your actual Hugging Face dataset ID
-          python3 -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='USER/REPO', repo_type='dataset', local_dir='.', token='${{ secrets.HF_TOKEN }}')"
+          python3 -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='MASHOLA/LIVESTREAM', repo_type='dataset', local_dir='.', token='${{ secrets.HF_TOKEN }}')"
 
       - name: Prepare Playlist and Fix Filenames
         run: |
