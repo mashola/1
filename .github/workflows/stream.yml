@@ -1,0 +1,44 @@
+name: 24/7 YouTube Stream
+on:
+  schedule:
+    - cron: '0 */6 * * *' # Restarts every 6 hours (GitHub's limit)
+  workflow_dispatch:      # Allows you to start it manually
+
+jobs:
+  stream:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install FFmpeg and Python Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg python3-pip
+          pip3 install huggingface_hub
+
+      - name: Download Assets from Hugging Face
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          # Replace 'USER/REPO' with your actual Hugging Face dataset ID
+          python3 -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='USER/REPO', repo_type='dataset', local_dir='.', token='${{ secrets.HF_TOKEN }}')"
+
+      - name: Prepare Playlist and Fix Filenames
+        run: |
+          # Remove spaces from filenames to prevent FFmpeg errors
+          for f in *\ *.wav; do [ -e "$f" ] && mv "$f" "${f// /_}"; done
+          # Generate the playlist.txt file
+          for f in *.wav; do echo "file '$PWD/$f'" >> playlist.txt; done
+
+      - name: Start Stream (6 Hour Block)
+        env:
+          STREAM_KEY: ${{ secrets.STREAM_KEY }}
+        run: |
+          # We use a 355-minute timeout so it shuts down cleanly just before the 360-minute limit
+          timeout 355m ffmpeg -re -loop 1 -i image.jpg \
+          -f concat -safe 0 -stream_loop -1 -i playlist.txt \
+          -vf "scale=1280:720,format=yuv420p" \
+          -c:v libx264 -preset veryfast -b:v 2500k -maxrate 2500k -bufsize 5000k \
+          -g 60 -c:a aac -b:a 128k -ar 44100 \
+          -f flv "rtmp://a.rtmp.youtube.com/live2/$STREAM_KEY" || true
